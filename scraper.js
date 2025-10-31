@@ -21,8 +21,14 @@ async function scrapeGoldmanSachsTeam() {
     console.log('Finding all team members (all loaded in DOM)...');
     
     // Get total count of people - all 138 are loaded at once
+    // Find people by looking for divs with "Advisor" or "Value Accelerator Core" text
     const totalPeople = await page.evaluate(() => {
-      return document.querySelectorAll('img[class*="cursor-pointer"]').length;
+      const allDivs = Array.from(document.querySelectorAll('div'));
+      const roleDivs = allDivs.filter(div => {
+        const text = div.textContent.trim();
+        return text === 'Advisor' || text === 'Value Accelerator Core';
+      });
+      return roleDivs.length;
     });
     
     console.log(`Found ${totalPeople} total people in the DOM (all pages loaded)`);
@@ -32,11 +38,22 @@ async function scrapeGoldmanSachsTeam() {
       try {
         console.log(`\nProcessing person ${i + 1} of ${totalPeople}...`);
         
-        // Click the image to open modal (re-query each time to avoid stale elements)
+        // Click the person's card by finding the image associated with their role div
         await page.evaluate((index) => {
-          const images = document.querySelectorAll('img[class*="cursor-pointer"]');
-          if (images[index]) {
-            images[index].click();
+          const allDivs = Array.from(document.querySelectorAll('div'));
+          const roleDivs = allDivs.filter(div => {
+            const text = div.textContent.trim();
+            return text === 'Advisor' || text === 'Value Accelerator Core';
+          });
+          
+          if (roleDivs[index]) {
+            const parent = roleDivs[index].parentElement;
+            if (parent) {
+              const img = parent.querySelector('img');
+              if (img) {
+                img.click();
+              }
+            }
           }
         }, i);
         
@@ -88,58 +105,41 @@ async function scrapeGoldmanSachsTeam() {
         const personData = await page.evaluate(() => {
           const allDivs = Array.from(document.querySelectorAll('div'));
           
-          // Find the modal content container
-          const modalContent = allDivs.find(div => {
+          // Find the SPECIFIC modal popup (not the whole page)
+          // It should contain the person's data but NOT other advisor names
+          const modalPopup = allDivs.find(div => {
             const text = div.textContent || '';
-            return text.includes('Name') && text.includes('Team') && 
-                   text.includes('Region') && text.includes('Center of Excellence');
+            // Must have these fields
+            if (!text.includes('Name') || !text.includes('Team') || !text.includes('Region') || !text.includes('Center of Excellence')) {
+              return false;
+            }
+            // Must NOT include names from the list (to exclude the main page container)
+            const excludeNames = ['Adrienne Kirby', 'Ajit Shah', 'Alex Niemeyer', 'Alison Chan'];
+            return !excludeNames.some(name => text.includes(name));
           });
           
-          if (!modalContent) return null;
+          if (!modalPopup) return null;
           
-          // Helper to find value after a label
+          // Get all leaf text nodes in order from the modal popup only
+          const children = Array.from(modalPopup.querySelectorAll('div'));
+          const allText = children
+            .filter(div => div.children.length === 0)  // Only leaf divs
+            .map(div => div.textContent.trim())
+            .filter(text => text.length > 0);
+          
+          // Helper to find value after a label in the array
           const findValue = (labelText) => {
-            const children = Array.from(modalContent.querySelectorAll('div'));
-            for (let i = 0; i < children.length; i++) {
-              const div = children[i];
-              const directText = Array.from(div.childNodes)
-                .filter(node => node.nodeType === Node.TEXT_NODE)
-                .map(node => node.textContent.trim())
-                .filter(t => t.length > 0)
-                .join('');
-              
-              if (directText === labelText || div.textContent.trim() === labelText) {
-                let nextEl = div.nextElementSibling;
-                if (nextEl && !['Name', 'Team', 'Region', 'Center of Excellence', 'Investment Strategy'].includes(nextEl.textContent.trim())) {
-                  return nextEl.textContent.trim();
-                }
-                
-                if (div.parentElement) {
-                  nextEl = div.parentElement.nextElementSibling;
-                  if (nextEl && !['Name', 'Team', 'Region', 'Center of Excellence', 'Investment Strategy'].includes(nextEl.textContent.trim())) {
-                    return nextEl.textContent.trim();
-                  }
-                }
-              }
+            const index = allText.findIndex(text => text === labelText);
+            if (index !== -1 && index + 1 < allText.length) {
+              return allText[index + 1];
             }
             return '';
           };
           
-          // Find description - it's the longest text block
+          // Find description - it's the longest text (> 200 chars)
           const findDescription = () => {
-            const textDivs = Array.from(modalContent.querySelectorAll('div'))
-              .filter(div => {
-                const text = div.textContent.trim();
-                const isLeaf = div.children.length === 0 || 
-                              (div.children.length === 1 && div.children[0].tagName === 'BR');
-                return isLeaf && text.length > 100 && 
-                       !text.includes('Name') && !text.includes('Team') && 
-                       !text.includes('Region');
-              })
-              .map(div => div.textContent.trim())
-              .sort((a, b) => b.length - a.length);
-            
-            return textDivs.length > 0 ? textDivs[0] : '';
+            const longTexts = allText.filter(text => text.length > 200);
+            return longTexts.length > 0 ? longTexts[0] : '';
           };
           
           return {
