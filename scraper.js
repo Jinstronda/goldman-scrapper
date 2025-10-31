@@ -121,7 +121,6 @@ async function scrapeGoldmanSachsTeam() {
           const allDivs = Array.from(document.querySelectorAll('div'));
           
           // Find the SPECIFIC modal popup (not the whole page)
-          // The modal popup should be much smaller than the whole page
           const modalCandidates = allDivs.filter(div => {
             const text = div.textContent || '';
             // Must have all these fields
@@ -130,10 +129,11 @@ async function scrapeGoldmanSachsTeam() {
                    text.includes('Investment Strategy');
           });
           
-          // Find the smallest one (the actual modal, not the page container)
-          const modalPopup = modalCandidates.sort((a, b) => {
-            return a.textContent.length - b.textContent.length;
-          })[0];
+          // Find the one with description (text length between 900-5000 chars)
+          // Too small = just labels, too large = whole page container
+          const modalPopup = modalCandidates.find(m => {
+            return m.textContent.length > 900 && m.textContent.length < 5000;
+          });
           
           if (!modalPopup) return null;
           
