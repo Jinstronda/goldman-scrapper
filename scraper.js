@@ -38,6 +38,15 @@ async function scrapeGoldmanSachsTeam() {
       try {
         console.log(`\nProcessing person ${i + 1} of ${totalPeople}...`);
         
+        // Close any existing modal first
+        await page.evaluate(() => {
+          const closeBtn = document.querySelector('.fa-close, .close, [class*="close"]');
+          if (closeBtn) {
+            closeBtn.click();
+          }
+        });
+        await page.waitForTimeout(300);
+        
         // Click the person's card by finding the image associated with their role div
         await page.evaluate((index) => {
           const allDivs = Array.from(document.querySelectorAll('div'));
@@ -57,15 +66,21 @@ async function scrapeGoldmanSachsTeam() {
           }
         }, i);
         
-        await page.waitForTimeout(1000);
+        // Wait longer for modal to appear
+        await page.waitForTimeout(1500);
         
-        // Wait for modal to be visible with data
+        // Check if modal appeared - look for a small container with the person's specific data
         const modalVisible = await page.evaluate(() => {
-          return Array.from(document.querySelectorAll('div')).some(div => 
-            div.textContent.includes('Name') && 
-            div.textContent.includes('Team') && 
-            div.textContent.includes('Region')
-          );
+          const allDivs = Array.from(document.querySelectorAll('div'));
+          const modals = allDivs.filter(div => {
+            const text = div.textContent || '';
+            return text.includes('Name') && text.includes('Team') && 
+                   text.includes('Region') && text.includes('Center of Excellence') &&
+                   text.includes('Investment Strategy');
+          });
+          
+          // Should have at least 2 candidates (page + modal)
+          return modals.length >= 2;
         });
         
         if (!modalVisible) {
@@ -106,17 +121,19 @@ async function scrapeGoldmanSachsTeam() {
           const allDivs = Array.from(document.querySelectorAll('div'));
           
           // Find the SPECIFIC modal popup (not the whole page)
-          // It should contain the person's data but NOT other advisor names
-          const modalPopup = allDivs.find(div => {
+          // The modal popup should be much smaller than the whole page
+          const modalCandidates = allDivs.filter(div => {
             const text = div.textContent || '';
-            // Must have these fields
-            if (!text.includes('Name') || !text.includes('Team') || !text.includes('Region') || !text.includes('Center of Excellence')) {
-              return false;
-            }
-            // Must NOT include names from the list (to exclude the main page container)
-            const excludeNames = ['Adrienne Kirby', 'Ajit Shah', 'Alex Niemeyer', 'Alison Chan'];
-            return !excludeNames.some(name => text.includes(name));
+            // Must have all these fields
+            return text.includes('Name') && text.includes('Team') && 
+                   text.includes('Region') && text.includes('Center of Excellence') &&
+                   text.includes('Investment Strategy');
           });
+          
+          // Find the smallest one (the actual modal, not the page container)
+          const modalPopup = modalCandidates.sort((a, b) => {
+            return a.textContent.length - b.textContent.length;
+          })[0];
           
           if (!modalPopup) return null;
           
