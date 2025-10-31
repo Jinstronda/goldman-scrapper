@@ -1,0 +1,21 @@
+{
+  "name": "goldman-sachs-scraper",
+  "version": "1.0.0",
+  "description": "Scraper for Goldman Sachs Value Accelerator team data",
+  "main": "scraper.js",
+  "scripts": {
+    "scrape": "node scraper.js",
+    "install-browsers": "npx playwright install chromium"
+  },
+  "keywords": [
+    "scraper",
+    "playwright",
+    "goldman-sachs"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "playwright": "^1.40.0"
+  }
+}
+

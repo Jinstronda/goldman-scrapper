@@ -1,0 +1,6 @@
+node_modules/
+team_data.json
+team_data.csv
+*.log
+.DS_Store
+
